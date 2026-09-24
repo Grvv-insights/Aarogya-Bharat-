@@ -1,0 +1,1245 @@
+====================================================================================================
+  AAROGYABHARAT (MEDJOURNEY INDIA) - MEDICAL TOURISM & VALUE TRAVEL PLATFORM
+  COMPLETE ARCHITECTURE, CODE WORKFLOW & COMPREHENSIVE INTERVIEW PREPARATION GUIDE
+====================================================================================================
+
+Author: Lead Full-Stack Engineering Team
+Date of Documentation: September 2026
+Target Audience: Full-Stack Engineers, System Architects, Technical Interviewers, Project Reviewers
+Stack: React 18, TypeScript, Vite, Tailwind CSS, Node.js, Express, MongoDB, Mongoose, JWT, bcryptjs
+
+====================================================================================================
+TABLE OF CONTENTS
+====================================================================================================
+1. EXECUTIVE SUMMARY & PLATFORM MISSION
+2. HIGH-LEVEL SYSTEM ARCHITECTURE & TOPOLOGY
+   2.1 System Topology Diagram
+   2.2 Detailed Website Data Flow Flowcharts
+       - Flowchart A: Complete Patient Discovery, Consultation & Journey Lifecycle
+       - Flowchart B: Authentication, JWT Security & Role-Based Access Control (RBAC)
+       - Flowchart C: Decoupled Cost Estimator Dynamic Calculation Engine
+       - Flowchart D: Consultation Inquiry, Provider Triage & Response Loop
+3. TECHNOLOGY STACK JUSTIFICATION & TRADE-OFFS
+4. DATABASE MODELING & MONGOOSE SCHEMAS (DETAILED FIELD-LEVEL)
+5. BACKEND ARCHITECTURE & WORKFLOW DEEP-DIVE
+   5.1 Server Entry Point & Middleware Pipeline
+   5.2 Authentication & Role-Based Access Control (RBAC)
+   5.3 Decoupled Pricing Engine (Treatment Cost Estimator)
+   5.4 Consultation & Telehealth Workflow
+   5.5 Medical Document Center & Secure Storage Prototype
+   5.6 Travel Logistics & 7-Stage Journey Roadmap
+   5.7 Provider & Admin Management Pipelines
+   5.8 REST API Route Matrix & Payloads
+6. FRONTEND ARCHITECTURE & REACT WORKFLOW DEEP-DIVE
+   6.1 Application Bootstrap & Route Tree
+   6.2 Authentication State & Axios Interceptors
+   6.3 Discovery Flow: Treatment -> Hospital -> Doctor -> Consultation
+   6.4 Interactive Cost Estimator UX & State Machine
+   6.5 Role-Based Dashboards (Patient, Provider, Admin)
+   6.6 Component Design System & Responsive Layouts
+7. FEATURE-BY-FEATURE WORKING, IMPLEMENTATION & TECH MAPPING
+8. MINUTE CODE-LEVEL DETAILS COMMONLY PROBED IN INTERVIEWS
+   8.1 Why Decouple Calculation Logic into a Backend Service?
+   8.2 Why Show Cost Ranges Rather Than a Single Quote?
+   8.3 Mongoose Pre-save Hook vs Controller Hashing
+   8.4 Why MongoDB was Chosen and How Schema Supports Postgres Migration
+   8.5 JWT Token Storage in LocalStorage vs HttpOnly Cookies
+   8.6 RBAC Security Pitfalls & Route Protection
+   8.7 Database Indexing Strategy
+   8.8 Handling Medical Disclaimers & Non-Diagnostic Compliance
+9. 70+ RAPID-FIRE & SCENARIO-BASED INTERVIEW QUESTIONS & MODEL ANSWERS
+   9.1 Foundation Technical Questions (Q1 - Q50)
+   9.2 Advanced System Design & Real-World Scenario Questions (Q51 - Q70)
+10. PRODUCTION HARDENING ROADMAP (WHAT'S NEXT FOR SCALE)
+
+====================================================================================================
+1. EXECUTIVE SUMMARY & PLATFORM MISSION
+====================================================================================================
+AarogyaBharat (MedJourney India) is a production-grade prototype for an India-focused Medical 
+Tourism and Medical Value Travel (MVT) platform.
+
+India is one of the world's premier medical travel destinations, offering JCI/NABH accredited 
+hospitals, globally trained doctors, cutting-edge robotic surgical equipment, and 60%–90% cost 
+savings compared to the USA and UK. However, international patients face high friction:
+  - Difficulty verifying hospital accreditations and doctor credentials from abroad.
+  - Opaque, unpredictable pricing with fear of hidden surprise medical bills.
+  - Logistical complexity: Medical Visas (MED-1), flight booking, recovery lodging, airport escorts.
+  - Fragmented records: diagnostic scans and prescriptions scattered over email and messaging apps.
+
+AarogyaBharat solves this end-to-end:
+  1. Discovery: Search accredited hospitals and doctors by specialty, procedure, city, and rating.
+  2. Cost Planning: Non-binding, range-based Treatment Cost Estimator breaking down surgery, OT, 
+     hospitalization, hotel lodging, chauffeur transfers, flights, and visa fees.
+  3. Pre-Op Clinical Triage: Patients upload case summaries and request teleconsultations; providers 
+     review documents and respond with clinical recommendations.
+  4. Medical Document Vault: Secure classification of scans, lab reports, and MEA visa letters.
+  5. 7-Stage Patient Journey Timeline: Tracking milestones from initial medical evaluation to hospital 
+     admission, surgery, recovery, and post-discharge telehealth follow-ups.
+
+====================================================================================================
+2. HIGH-LEVEL SYSTEM ARCHITECTURE & TOPOLOGY
+====================================================================================================
+
+2.1 System Topology Diagram
+----------------------------------------------------------------------------------------------------
+The platform follows a decoupled, monorepo client-server architecture:
+
+  +---------------------------------------------------------------------------------+
+  |                                   CLIENT (SPA)                                  |
+  |  React 18 + TypeScript + Vite + Tailwind CSS + Lucide Icons + React Router v6   |
+  |  - AuthContext (JWT Session & LocalStorage Sync)                                |
+  |  - Axios API Layer with Bearer Request Interceptors                             |
+  |  - Public Discovery Views (/treatments, /hospitals, /doctors, /cities)          |
+  |  - Interactive Tools (/cost-estimator, /consultation)                           |
+  |  - Role Dashboards (/dashboard, /provider/dashboard, /admin/dashboard)          |
+  +---------------------------------------+-----------------------------------------+
+                                          | JSON over HTTPS (Port 5000)
+                                          v
+  +---------------------------------------------------------------------------------+
+  |                                  SERVER (API)                                   |
+  |  Node.js + Express + TypeScript                                                 |
+  |  - Middleware: Helmet, CORS, Morgan, express.json()                             |
+  |  - Auth Security: bcryptjs (10 salt rounds), jsonwebtoken (7d expiry)           |
+  |  - Middleware Guard: protect (JWT verification), authorize (RBAC role check)    |
+  |  - Route Controllers: Auth, Hospital, Doctor, Treatment, Appointment, Travel,    |
+  |                       Consultation, Documents, CostEstimator, Admin             |
+  |  - Business Services: costEstimatorService, appointmentService, etc.           |
+  +---------------------------------------+-----------------------------------------+
+                                          | Mongoose ODM (Connection Pooling)
+                                          v
+  +---------------------------------------------------------------------------------+
+  |                                 DATABASE LAYER                                  |
+  |  MongoDB (Engine: WiredTiger, Database: medical_tourism_db)                      |
+  |  - Collections: users, hospitals, doctors, treatments, appointments,            |
+  |                 consultations, medicaldocuments, travelplans, reviews,          |
+  |                 costestimates                                                   |
+  |  - Indexes: Unique slugs, compound category/city indexes, patient FK references |
+  +---------------------------------------------------------------------------------+
+
+2.2 Detailed Website Data Flow Flowcharts
+----------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+FLOWCHART A: COMPLETE PATIENT DISCOVERY, CONSULTATION & JOURNEY LIFECYCLE
+----------------------------------------------------------------------------------------------------
+  [ International / Domestic Patient ]
+                 │
+                 ▼
+  [ 1. Discovery Phase ] ───> GET /api/treatments & GET /api/hospitals
+                 │            - Searches procedures (e.g., CABG, Robotic Knee Replacement, IVF)
+                 │            - Filters accredited hospitals by city (Delhi NCR, Chennai, Mumbai)
+                 │            - Compares India pricing vs USA/UK (up to 80% savings)
+                 ▼
+  [ 2. Cost Estimation ] ───> POST /api/estimator/calculate (Public REST Endpoint)
+                 │            - User inputs Treatment, City, Hospital, Complexity, Durations
+                 │            - Decoupled server engine derives 6-part itemized ranges
+                 │            - Evaluates totals: Medical, Travel, Lodging, Total Range
+                 │            - Toggle currency: INR (₹) or USD ($)
+                 │            - "Save to Dashboard" ───> POST /api/estimator/save (Protected)
+                 ▼
+  [ 3. Pre-Op Clinical Inquiry ] ───> POST /api/consultations (Protected)
+                 │                    - Enters medical history & symptoms description
+                 │                    - Uploads scans/prescriptions ───> POST /api/documents/my
+                 │                    - Creates pending case record in MongoDB
+                 ▼
+  [ 4. Specialist Review ] ───> Provider reviews on /provider/dashboard (GET /api/consultations)
+                 │              - Hospital doctor reviews clinical history & radiology scans
+                 │              - Drafts formal advice ───> PATCH /api/consultations/:id
+                 │              - Status moves: 'pending' -> 'responded' / 'reviewed'
+                 ▼
+  [ 5. Teleconsultation Video Call ] ───> POST /api/appointments
+                 │                        - Specialist video teleconsultation conducted
+                 │                        - Pre-op clinical roadmap confirmed
+                 ▼
+  [ 6. Travel Logistics Plan ] ───> POST /api/travel-plans/my
+                 │                  - Official Medical Visa (MED-1) invitation letter clearance
+                 │                  - Flight booking & airport VIP chauffeur pickup escort
+                 │                  - Recovery hotel / serviced apartment lodging confirmed
+                 ▼
+  [ 7. Hospital Admission & Surgery ] ───> Patient arrives in India, chauffeured to JCI center
+                 │                        - Surgery performed by accredited surgical faculty
+                 │                        - Post-op ICU & in-patient recovery
+                 ▼
+  [ 8. Post-Op Care & Return ] ───> Fit-to-fly clinical sign-off, departure flight,
+                                    Post-discharge telehealth follow-ups on /dashboard.
+
+----------------------------------------------------------------------------------------------------
+FLOWCHART B: AUTHENTICATION, JWT SECURITY & ROLE-BASED ACCESS CONTROL (RBAC)
+----------------------------------------------------------------------------------------------------
+  [ Inbound Client Request ]
+                 │
+                 ├─── Case 1: Public Registration (POST /api/auth/register)
+                 │         │
+                 │         ├── Check Role: if (role === 'admin') ──> Return 403 Forbidden!
+                 │         │                                        (Admins cannot register publicly)
+                 │         ├── Email Check: if (exists in DB) ──> Return 409 Conflict
+                 │         ├── Password Hash: Mongoose pre-save hook runs bcrypt.hash(password, 10)
+                 │         ├── MongoDB Insert: User collection (default role: 'patient')
+                 │         └── JWT Sign: jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' })
+                 │             Response 201: { token, user } ──> Client caches token in localStorage
+                 │
+                 ├─── Case 2: User Login (POST /api/auth/login)
+                 │         │
+                 │         ├── Query User by email in MongoDB
+                 │         ├── Verify: user.comparePassword(password) ──> bcrypt.compare()
+                 │         ├── Mismatch? ──> Return 401 Unauthorized
+                 │         └── Match? ──> Issue JWT token & return user profile
+                 │
+                 └─── Case 3: Accessing Protected Endpoint (e.g., /api/documents/my, /api/admin/stats)
+                           │
+                           ▼
+                   [ Axios Request Interceptor ]
+                   Reads token from localStorage
+                   Injects Header: Authorization: Bearer <token>
+                           │
+                           ▼
+                   [ Express Middleware: protect ]
+                   ├── Header missing? ──> Return 401 Unauthorized ("Not authorized, no token")
+                   ├── jwt.verify(token, JWT_SECRET)
+                   │         ├── Expired / Tampered? ──> Return 401 Unauthorized
+                   │         └── Valid? ──> Query User in DB (excluding passwordHash)
+                   │                        Attach user to request: req.user = user
+                           │
+                           ▼
+                   [ Express Middleware: authorize(...allowedRoles) ]
+                   ├── Checks: if (!allowedRoles.includes(req.user.role))
+                   │         └── True? ──> Return 403 Forbidden ("Role not authorized for route")
+                           │
+                           ▼
+                   [ Controller Executes ] (Access Granted)
+
+----------------------------------------------------------------------------------------------------
+FLOWCHART C: DECOUPLED COST ESTIMATOR DYNAMIC CALCULATION ENGINE
+----------------------------------------------------------------------------------------------------
+  [ User adjusts sliders & selectors on /cost-estimator ]
+  (Treatment, City, Hospital, Complexity, Lodging Duration, Travel Duration)
+                 │
+                 ▼ [ Debounced React State Trigger ]
+  [ Client Service: calculateCostEstimate(params) ]
+                 │
+                 ▼ HTTP POST /api/estimator/calculate (JSON Payload)
+  [ Server Route: costEstimatorRoutes.ts ]
+                 │
+                 ▼
+  [ Controller: costEstimatorController.ts ]
+                 │
+                 ▼
+  [ Business Service: costEstimatorService.calculateEstimate(input) ]
+                 │
+                 ├── 1. Treatment Baseline Lookup:
+                 │      Queries Treatment in MongoDB (e.g. CABG: minINR 2,50,000, maxINR 4,20,000)
+                 │
+                 ├── 2. Complexity Multiplier:
+                 │      Standard: 0.90x | Moderate: 1.00x | High/Revision: 1.35x
+                 │      => medicalTreatment = { minINR, maxINR, minUSD, maxUSD }
+                 │
+                 ├── 3. Hospital / Clinical Calculation:
+                 │      OT charges, pre-op diagnostics, anesthesia, pharmacy = 22% to 32% of procedure
+                 │      => hospitalClinical = { minINR, maxINR, minUSD, maxUSD }
+                 │
+                 ├── 4. Recovery Lodging Calculation:
+                 │      accommodation = days * ₹3,200 to ₹6,200 ($40 to $75 / night)
+                 │
+                 ├── 5. Local Transportation Calculation:
+                 │      localTransportation = Airport VIP transfer base ₹3,500-₹7,000 + extra clinic shuttles
+                 │
+                 ├── 6. International Travel (Airfare) Calculation:
+                 │      travel = Round-trip flight planning envelope (₹58,000 to ₹1,05,000 / $700 to $1,280)
+                 │
+                 ├── 7. Other Estimated Expenses:
+                 │      otherExpenses = e-Medical Visa (MED-1) + 5G tourist SIM + meals (₹12,000 to ₹24,000)
+                 │
+                 └── 8. Totals Aggregation:
+                        - estimatedMedicalCost = medicalTreatment + hospitalClinical
+                        - estimatedTravelCost = travel + localTransportation
+                        - estimatedAccommodationCost = accommodation
+                        - estimatedTotalRange = sum of all 6 components (lower bounds summed, upper bounds summed)
+                        - Embeds statutory non-binding medical planning disclaimer
+                 │
+                 ▼ HTTP 200 OK Response
+  [ Client React View Updates Instantly ]
+  - Hero Range Card: ₹X – ₹Y / $X – $Y
+  - Currency toggle (INR / USD) formats values using toLocaleString
+  - 6-part itemized breakdown table renders lower and upper bounds
+  - "Save Estimate to My Dashboard" button (persists to CostEstimate collection in MongoDB)
+
+----------------------------------------------------------------------------------------------------
+FLOWCHART D: CONSULTATION INQUIRY, PROVIDER TRIAGE & RESPONSE LOOP
+----------------------------------------------------------------------------------------------------
+  [ PATIENT ]                                       [ HEALTHCARE PROVIDER / DOCTOR ]
+      │                                                           │
+      ▼                                                           │
+  Submits Case on /consultation                                  │
+  - Hospital, Doctor, Symptoms, Scans                             │
+      │                                                           │
+      ▼ POST /api/consultations (Bearer)                          │
+  Saved in MongoDB: { status: 'pending' }                         │
+      │                                                           │
+      │                                                           ▼
+      │                                           Logs in to /provider/dashboard
+      │                                           - GET /api/consultations (role: provider)
+      │                                           - Inquiries queue displays pending case
+      │                                                           │
+      │                                                           ▼
+      │                                           Doctor reviews symptoms & imaging
+      │                                           - Drafts clinical review & recommendations
+      │                                           - Clicks "Submit Hospital Response"
+      │                                                           │
+      │                                                           ▼
+      │                                           PATCH /api/consultations/:id
+      │                                           MongoDB updated: { status: 'responded', response: '...' }
+      │                                                           │
+      ▼                                                           │
+  Patient refreshes or visits /dashboard                          │
+  - GET /api/consultations/my                                     │
+  - Consultation card displays green checkmark:                   │
+    "SPECIALIST REVIEW COMPLETE"                                  │
+  - Doctor's official clinical response is rendered.              │
+
+
+====================================================================================================
+3. TECHNOLOGY STACK JUSTIFICATION & TRADE-OFFS
+====================================================================================================
+1. FRONTEND: React 18 + TypeScript + Vite + Tailwind CSS
+   - Why React 18: Component-driven architecture, concurrent rendering, rich ecosystem for complex 
+     dashboards, modals, and dynamic timeline widgets.
+   - Why TypeScript: Eliminates undefined property bugs across complex medical entities (e.g., 
+     Treatment.estimatedCostRange.minINR vs maxUSD), provides compile-time interface enforcement.
+   - Why Vite: Instant Hot Module Replacement (HMR) (<50ms reload) vs Webpack (several seconds), 
+     esbuild-powered pre-bundling, optimized production chunking.
+   - Why Tailwind CSS: Zero runtime CSS overhead, standardized design tokens (colors, spacing, typography), 
+     responsive utility classes (`hidden sm:block`, `lg:grid-cols-12`), dark mode / custom palette.
+   - Why Axios: Request/Response interceptors allow seamless auto-attachment of JWT Authorization headers 
+     and unified HTTP error handling across all service files.
+
+2. BACKEND: Node.js + Express + TypeScript
+   - Why Node.js & Express: Non-blocking asynchronous I/O ideal for concurrent API requests, lightweight 
+     microservice-ready footprint, massive npm package ecosystem.
+   - Why TypeScript: Shares common interfaces and domain models with the client, ensures type safety 
+     from database queries through HTTP responses.
+   - Why Helmet & CORS: Secures HTTP response headers (X-Content-Type-Options, Strict-Transport-Security, 
+     X-Frame-Options) and restricts API access to authorized frontend origins.
+   - Why Morgan: HTTP request logging providing real-time visibility into route latencies and status codes.
+
+3. DATABASE: MongoDB + Mongoose
+   - Why MongoDB: Flexible document schema accommodates heterogeneous medical fields (e.g., variable 
+     hospital facilities, doctor consultation fees in multiple currencies, international patient services).
+   - Why Mongoose: Provides strict schema definition, type casting, validation, pre-save middleware hooks 
+     (automatic password hashing), and indexed query optimization.
+   - Migration Readiness: All schemas use explicit scalar fields and foreign key ObjectIds rather than 
+     unbounded arbitrary JSON objects, making eventual migration to PostgreSQL (via Prisma or TypeORM) 
+     direct and painless.
+
+====================================================================================================
+4. DATABASE MODELING & MONGOOSE SCHEMAS (DETAILED FIELD-LEVEL)
+====================================================================================================
+The data model comprises 10 core collections. All schemas include `{ timestamps: true }`, generating 
+`createdAt` and `updatedAt` ISO date fields automatically.
+
+4.1 User Schema (`server/src/models/User.ts`)
+  - `name`: String, required, trimmed
+  - `email`: String, required, unique, lowercase, trimmed
+  - `passwordHash`: String, required (excluded in JSON returns via delete or explicit project)
+  - `role`: String, enum: ['patient', 'provider', 'admin'], default: 'patient'
+  - `phone`: String, optional
+  - `country`: String, default: 'United States'
+  - `profile`: { avatarUrl: String, bio: String, preferredLanguage: String }
+  - Pre-save Hook: Runs `bcrypt.hash(this.passwordHash, 10)` whenever `isModified('passwordHash')` is true.
+  - Instance Method: `comparePassword(candidate: string): Promise<boolean>`
+
+4.2 Hospital Schema (`server/src/models/Hospital.ts`)
+  - `name`: String, required, unique
+  - `slug`: String, required, unique, lowercase, indexed
+  - `description`: String, required
+  - `city`: String, required, indexed
+  - `state`: String, required
+  - `address`: String, required
+  - `specialties`: [String] (e.g., 'Cardiology', 'Orthopedics', 'Oncology', 'Neurology')
+  - `treatments`: [ObjectId ref: 'Treatment']
+  - `facilities`: [String] (e.g., 'Robotic Surgery Suite', 'ICU', 'Helipad', 'Private Suites')
+  - `accreditation`: [String] (e.g., 'JCI', 'NABH', 'NABL', 'ISO')
+  - `internationalPatientServices`: [String] (e.g., 'Visa Assistance', 'Airport Chauffeur', 'Translators')
+  - `languagesSupported`: [String] (e.g., 'English', 'Arabic', 'French', 'Russian', 'Bengali')
+  - `contact`: { email: String, phone: String, website: String }
+  - `verificationStatus`: enum: ['verified', 'pending', 'unverified'], default: 'pending'
+  - `rating`: Number, default: 4.8 (1 to 5)
+  - `reviewCount`: Number, default: 0
+  - `bedCount`: Number, default: 500
+  - `establishedYear`: Number
+  - `image`: String (URL)
+  - `gallery`: [String]
+
+4.3 Doctor Schema (`server/src/models/Doctor.ts`)
+  - `name`: String, required, trimmed
+  - `slug`: String, required, unique, lowercase
+  - `hospital`: ObjectId ref: 'Hospital', required, indexed
+  - `specialization`: String, required
+  - `qualification`: String, required (e.g., 'MBBS, MS, MCh, Fellowship Royal College UK')
+  - `experience`: Number, required (years in clinical practice)
+  - `languages`: [String]
+  - `bio`: String, required
+  - `consultationFee`: {
+      minUSD: Number, maxUSD: Number,
+      minINR: Number, maxINR: Number,
+      currency: String (default: 'USD')
+    }
+  - `profileImage`: String (URL)
+  - `verificationStatus`: enum: ['verified', 'pending', 'unverified'], default: 'verified'
+  - `isAvailableForTeleconsult`: Boolean, default: true
+  - `featured`: Boolean, default: false
+
+4.4 Treatment Schema (`server/src/models/Treatment.ts`)
+  - `name`: String, required, unique
+  - `slug`: String, required, unique, lowercase
+  - `category`: String, required, indexed (e.g., 'Cardiology', 'Orthopedics', 'Organ Transplant')
+  - `description`: String, required
+  - `overview`: String, required
+  - `procedureInformation`: String, required
+  - `estimatedDuration`: String (e.g., '3 - 5 hours')
+  - `estimatedCostRange`: {
+      minUSD: Number, maxUSD: Number,
+      minINR: Number, maxINR: Number,
+      usaComparisonUSD: Number,
+      ukComparisonUSD: Number,
+      disclaimer: String
+    }
+  - `recoveryInformation`: String
+  - `savingsPercentage`: Number (e.g., 75)
+  - `successRate`: Number, default: 95
+  - `popularCities`: [String]
+  - `relatedHospitals`: [ObjectId ref: 'Hospital']
+  - `relatedDoctors`: [ObjectId ref: 'Doctor']
+  - `image`: String (URL)
+
+4.5 Appointment Schema (`server/src/models/Appointment.ts`)
+  - `patient`: ObjectId ref: 'User', required, indexed
+  - `doctor`: ObjectId ref: 'Doctor', required
+  - `hospital`: ObjectId ref: 'Hospital', required
+  - `treatment`: ObjectId ref: 'Treatment', optional
+  - `appointmentDate`: Date, required
+  - `appointmentType`: enum: ['teleconsult', 'in_person'], default: 'teleconsult'
+  - `status`: enum: ['pending', 'confirmed', 'completed', 'cancelled'], default: 'pending'
+  - `notes`: String
+  - `meetingLink`: String (telehealth video room URL)
+
+4.6 Consultation Schema (`server/src/models/Consultation.ts`)
+  - `patient`: ObjectId ref: 'User', required, indexed
+  - `hospital`: ObjectId ref: 'Hospital', required
+  - `doctor`: ObjectId ref: 'Doctor', optional
+  - `treatment`: ObjectId ref: 'Treatment', optional
+  - `message`: String, required (patient's clinical inquiry / symptoms)
+  - `preferredDate`: Date
+  - `documentReference`: String (e.g., 'DOC-2026-XRAY-KNEE')
+  - `status`: enum: ['pending', 'reviewed', 'responded', 'closed'], default: 'pending'
+  - `response`: String (hospital doctor's preliminary evaluation & advice)
+
+4.7 MedicalDocument Schema (`server/src/models/MedicalDocument.ts`)
+  - `patient`: ObjectId ref: 'User', required, indexed
+  - `documentType`: enum: ['medical_report', 'prescription', 'scan', 'lab_report', 
+                          'discharge_summary', 'visa_letter', 'report', 'other'], required
+  - `fileName`: String, required
+  - `fileUrl`: String, required
+  - `fileSize`: String (e.g., '2.4 MB')
+  - `uploadDate`: Date, default: Date.now
+  - `visibility`: enum: ['patient_and_doctor', 'private', 'hospital_only'], default: 'patient_and_doctor'
+  - `status`: enum: ['verified', 'pending_review', 'archived'], default: 'verified'
+  - `accessInfo`: String (encryption/access log information)
+  - `notes`: String
+
+4.8 TravelPlan Schema (`server/src/models/TravelPlan.ts`)
+  - `patient`: ObjectId ref: 'User', required, unique, indexed
+  - `destinationCity`: String, required
+  - `arrivalDate`: Date, required
+  - `departureDate`: Date, required
+  - `accommodation`: {
+      type: enum: ['hotel_3star', 'hotel_4star', 'hotel_5star', 'serviced_apartment', 'hospital_guest_house'],
+      details: String
+    }
+  - `transport`: {
+      airportPickup: Boolean,
+      details: String
+    }
+  - `hospital`: ObjectId ref: 'Hospital'
+  - `treatment`: ObjectId ref: 'Treatment'
+  - `notes`: String
+  - `status`: enum: ['planning', 'confirmed', 'in_progress', 'completed'], default: 'planning'
+
+4.9 CostEstimate Schema (`server/src/models/CostEstimate.ts`)
+  - `patient`: ObjectId ref: 'User', optional, indexed
+  - `treatment`: ObjectId ref: 'Treatment', optional
+  - `treatmentName`: String, required
+  - `city`: String, required
+  - `hospital`: ObjectId ref: 'Hospital', optional
+  - `hospitalName`: String, required
+  - `complexity`: enum: ['standard', 'moderate', 'high_revision'], default: 'moderate'
+  - `accommodationDuration`: Number, required (days)
+  - `travelDuration`: Number, required (days)
+  - `breakdown`:
+      - `medicalTreatment`: { minINR, maxINR, minUSD, maxUSD }
+      - `hospitalClinical`: { minINR, maxINR, minUSD, maxUSD }
+      - `accommodation`: { minINR, maxINR, minUSD, maxUSD }
+      - `localTransportation`: { minINR, maxINR, minUSD, maxUSD }
+      - `travel`: { minINR, maxINR, minUSD, maxUSD }
+      - `otherExpenses`: { minINR, maxINR, minUSD, maxUSD }
+  - `totals`:
+      - `estimatedMedicalCost`: { minINR, maxINR, minUSD, maxUSD }
+      - `estimatedTravelCost`: { minINR, maxINR, minUSD, maxUSD }
+      - `estimatedAccommodationCost`: { minINR, maxINR, minUSD, maxUSD }
+      - `estimatedTotalRange`: { minINR, maxINR, minUSD, maxUSD }
+  - `disclaimer`: String, required
+
+4.10 Review Schema (`server/src/models/Review.ts`)
+  - `patient`: ObjectId ref: 'User', required
+  - `hospital`: ObjectId ref: 'Hospital', required, indexed
+  - `doctor`: ObjectId ref: 'Doctor', optional
+  - `rating`: Number, min: 1, max: 5, required
+  - `comment`: String, required
+  - `moderationStatus`: enum: ['published', 'pending', 'flagged'], default: 'published'
+  - `patientName`: String, required
+  - `patientCountry`: String, required
+  - `treatmentName`: String
+
+====================================================================================================
+5. BACKEND ARCHITECTURE & WORKFLOW DEEP-DIVE
+====================================================================================================
+
+5.1 Server Entry Point & Middleware Pipeline
+  - File: `server/src/server.ts` & `server/src/app.ts`
+  - Lifecycle:
+    1. Loads environment variables from `.env` using `dotenv`.
+    2. Initializes Express application instance.
+    3. Mounts security middleware:
+       - `helmet()`: Sets Content-Security-Policy, HSTS, X-Frame-Options, DNS prefetch control.
+       - `cors({ origin: 'http://localhost:5173', credentials: true })`: Prevents unauthorized cross-origin requests.
+       - `morgan('dev')`: Formats HTTP logs for status, response times, and endpoints.
+       - `express.json({ limit: '10mb' })`: Parses inbound JSON request bodies.
+       - `express.urlencoded({ extended: true })`: Handles URL-encoded form submissions.
+    4. Connects to MongoDB via `mongoose.connect(process.env.MONGODB_URI)`.
+    5. Mounts aggregated router at `/api`.
+    6. Attaches global Error Handling Middleware (`errorHandler.ts`):
+       - Catches CastError, ValidationError, DuplicateKeyError (11000), JsonWebTokenError.
+       - Formats uniform error responses: `{ success: false, message: string, error?: string }`.
+    7. Starts HTTP listener on `PORT 5000`.
+
+5.2 Authentication & Role-Based Access Control (RBAC)
+  - Files: `server/src/controllers/authController.ts`, `server/src/services/authService.ts`, 
+           `server/src/middleware/authMiddleware.ts`
+  - Registration Flow:
+    1. User submits `name`, `email`, `password`, `role`, `country`, `phone`.
+    2. Validation: If `role === 'admin'`, request is rejected with `403 Forbidden` ("Admin accounts cannot 
+       be registered publicly"). Allowed self-registered roles: `patient` (default) or `provider`.
+    3. Service checks if user with email already exists; throws 409 Conflict if found.
+    4. Pre-save hook hashes password using `bcrypt.hash(password, 10)` before writing to MongoDB.
+    5. JWT is signed with payload `{ id: user._id, role: user.role }`, secret `JWT_SECRET`, expiry `7d`.
+    6. Returns 201 Created with `{ token, user }`.
+  - Login Flow:
+    1. Checks email and password existence in request body.
+    2. Finds user by email in MongoDB.
+    3. Executes `user.comparePassword(password)` -> `bcrypt.compare()`.
+    4. If mismatch, throws 401 Unauthorized.
+    5. Signs and issues fresh JWT token.
+  - Middleware Protection (`protect`):
+    1. Extracts `Authorization: Bearer <token>` from HTTP headers.
+    2. Verifies token via `jwt.verify(token, JWT_SECRET)`.
+    3. Finds user in MongoDB by payload `id` (excluding passwordHash).
+    4. Attaches user object to `req.user`.
+  - Role Authorization (`authorize(...roles)`):
+    1. Higher-order function returning Express middleware: `authorize('provider', 'admin')`.
+    2. Checks if `roles.includes(req.user.role)`.
+    3. If false, returns `403 Forbidden` ("User role is not authorized to access this route").
+
+5.3 Decoupled Pricing Engine (Treatment Cost Estimator)
+  - File: `server/src/services/costEstimatorService.ts`
+  - Design Philosophy:
+    - Calculations are 100% decoupled from the React UI and HTTP transport layer.
+    - Pure computational service that accepts input parameters and returns itemized mathematical ranges.
+    - Allows zero-downtime replacement with an AI neural pricing model or dynamic hospital rate matrix.
+  - Formulaic Logic:
+    1. Resolves Treatment baseline from MongoDB (`Treatment.estimatedCostRange` or fallback constants):
+       `minINR`, `maxINR`, `minUSD`, `maxUSD`.
+    2. Resolves Complexity Multiplier:
+       - `standard`: `0.90x` (routine primary procedure)
+       - `moderate`: `1.00x` (standard clinical case)
+       - `high_revision`: `1.35x` (complex revision, bilateral, secondary intervention)
+    3. Derives 6 Independent Cost Components:
+       - Component 1: `medicalTreatment` = baseline * complexityMultiplier (rounded to nearest 100).
+       - Component 2: `hospitalClinical` = 22% to 32% of medical treatment (OT charges, pre-op tests, 
+         anesthesia, pharmacy, post-op nursing care).
+       - Component 3: `accommodation` = days * ₹3,200 to ₹6,200 (or $40 to $75/day for private recovery hotel).
+       - Component 4: `localTransportation` = base ₹3,500–₹7,000 + extra daily clinic shuttles for stays > 10d.
+       - Component 5: `travel` = ₹58,000–₹1,05,000 ($700–$1,280 round-trip flight planning envelope).
+       - Component 6: `otherExpenses` = ₹12,000–₹24,000 ($145–$290 for e-Medical Visa, tourist 5G SIM, meals).
+    4. Derives 4 Summary Totals:
+       - `estimatedMedicalCost` = medicalTreatment + hospitalClinical
+       - `estimatedTravelCost` = travel + localTransportation
+       - `estimatedAccommodationCost` = accommodation
+       - `estimatedTotalRange` = sum of all 6 components (lower bounds summed, upper bounds summed)
+    5. Returns both INR (₹) and USD ($) ranges alongside the mandatory non-binding medical disclaimer.
+
+5.4 Consultation & Telehealth Workflow
+  - Files: `server/src/controllers/consultationController.ts`, `server/src/models/Consultation.ts`
+  - Flow:
+    1. Patient initiates inquiry from `/consultation` or `/hospitals/:id`.
+    2. Submits target hospital, doctor (optional), procedure, symptoms description, and document reference.
+    3. Status set to `pending`.
+    4. Hospital coordinator views inquiry on `ProviderDashboardPage` (`/provider/dashboard`).
+    5. Provider writes clinical evaluation/notes and hits "Submit Official Hospital Response".
+    6. Status updates to `responded` or `reviewed`.
+    7. Patient instantly sees response with checkmark badge on their `/dashboard`.
+
+5.5 Medical Document Center & Secure Storage Prototype
+  - Files: `server/src/controllers/medicalDocumentController.ts`, `server/src/models/MedicalDocument.ts`
+  - Design & Compliance Considerations:
+    - Medical documents contain Protected Health Information (PHI).
+    - To adhere to industry best practices, the prototype explicitly marks the storage engine as a 
+      demonstration metadata vault rather than simulating insecure public cloud links.
+    - Each record tracks `documentType` (`scan`, `prescription`, `discharge_summary`, `visa_letter`), 
+      `visibility` (`patient_and_doctor`, `private`, `hospital_only`), and `accessInfo` access audit trail.
+    - All routes require `protect` middleware; documents are strictly scoped to `req.user._id`.
+
+5.6 Travel Logistics & 7-Stage Journey Roadmap
+  - Files: `server/src/controllers/travelPlanController.ts`, `server/src/models/TravelPlan.ts`
+  - Stores patient arrival/departure dates, flight numbers (e.g. AI 102 JFK-DEL), lodging tier, airport pickup flag.
+  - Linked directly to the 7-stage visual timeline on the dashboard:
+    1. Medical Need Evaluation
+    2. Hospital Discovery & Selection
+    3. Specialist Teleconsultation
+    4. Treatment Protocol Confirmation
+    5. Travel & Visa Logistics (MED-1)
+    6. Hospital Admission & Procedure
+    7. Post-Discharge Telehealth Follow-up
+
+5.7 Provider & Admin Management Pipelines
+  - Files: `server/src/controllers/adminController.ts`, `server/src/controllers/hospitalController.ts`
+  - Provider Capabilities: Triage inquiries, respond to clinical cases, review assigned patients.
+  - Admin Capabilities: Query system platform statistics (`totalPatients`, `totalHospitals`, `totalDoctors`, 
+    `totalAppointments`, `pendingConsultations`), toggle hospital accreditation verification status 
+    (`verified` vs `unverified`), ensuring platform trust and safety.
+
+5.8 REST API Route Matrix
+  ------------------------------------------------------------------------------------------------------
+  METHOD | ENDPOINT                   | AUTH    | ROLES           | DESCRIPTION
+  ------------------------------------------------------------------------------------------------------
+  POST   | /api/auth/register         | Public  | Any (ex. Admin) | Register new patient or provider
+  POST   | /api/auth/login            | Public  | Any             | Authenticate and receive JWT
+  GET    | /api/auth/me               | Bearer  | Any             | Get authenticated user profile
+  GET    | /api/hospitals             | Public  | Any             | Search/filter accredited hospitals
+  GET    | /api/hospitals/:id         | Public  | Any             | Get hospital details by ID or slug
+  POST   | /api/hospitals             | Bearer  | Admin           | Create hospital listing
+  PATCH  | /api/hospitals/:id/verify  | Bearer  | Admin           | Toggle verification status
+  GET    | /api/doctors               | Public  | Any             | Search specialists & doctors
+  GET    | /api/doctors/:id           | Public  | Any             | Get doctor profile
+  GET    | /api/treatments            | Public  | Any             | List treatments & cost ranges
+  GET    | /api/treatments/:slug      | Public  | Any             | Get treatment details by slug
+  POST   | /api/appointments          | Bearer  | Patient         | Book teleconsult or hospital visit
+  GET    | /api/appointments/my       | Bearer  | Patient         | List patient appointments
+  GET    | /api/appointments          | Bearer  | Provider, Admin | List all appointments
+  PATCH  | /api/appointments/:id      | Bearer  | Provider, Admin | Confirm or update appointment status
+  POST   | /api/consultations         | Bearer  | Patient         | Submit clinical case inquiry
+  GET    | /api/consultations/my      | Bearer  | Patient         | Get patient inquiries
+  GET    | /api/consultations         | Bearer  | Provider, Admin | Get provider case queue
+  PATCH  | /api/consultations/:id     | Bearer  | Provider, Admin | Submit hospital clinical response
+  GET    | /api/documents/my          | Bearer  | Patient         | List patient medical documents
+  POST   | /api/documents/my          | Bearer  | Patient         | Record document metadata
+  DELETE | /api/documents/:id         | Bearer  | Patient         | Delete document record
+  GET    | /api/travel-plans/my       | Bearer  | Patient         | Fetch travel logistics roadmap
+  POST   | /api/travel-plans/my       | Bearer  | Patient         | Create/update travel plan
+  POST   | /api/estimator/calculate   | Public  | Any             | Calculate non-binding cost range
+  POST   | /api/estimator/save        | Bearer  | Patient         | Save estimate scenario to dashboard
+  GET    | /api/estimator/my          | Bearer  | Patient         | Fetch saved estimates
+  DELETE | /api/estimator/:id         | Bearer  | Patient         | Delete saved estimate scenario
+  GET    | /api/admin/stats           | Bearer  | Admin           | Aggregated platform statistics
+  GET    | /api/cities                | Public  | Any             | City guides with hospital counts
+  ------------------------------------------------------------------------------------------------------
+
+====================================================================================================
+6. FRONTEND ARCHITECTURE & REACT WORKFLOW DEEP-DIVE
+====================================================================================================
+
+6.1 Application Bootstrap & Route Tree (`client/src/App.tsx`)
+  - Wrapped inside `<AuthProvider>` and `<BrowserRouter>`.
+  - RootLayout encapsulates `<Navbar />`, `<main className="flex-grow">`, and `<Footer />`.
+  - Protected Routes: Wrapped with `<ProtectedRoute allowedRoles={['patient']} />` or `['provider', 'admin']`.
+    - If unauthenticated: redirects to `/login` with `location.state.from` preserved for redirect after login.
+    - If unauthorized role: redirects to `/dashboard` or home page with access alert.
+
+6.2 Authentication State & Axios Interceptors (`client/src/context/AuthContext.tsx` & `api.ts`)
+  - State maintained: `user: User | null`, `token: string | null`, `loading: boolean`.
+  - On mount: checks `localStorage.getItem('token')`. If present, calls `GET /api/auth/me` to hydrate state.
+  - Axios Request Interceptor:
+    ```typescript
+    api.interceptors.request.use((config) => {
+      const token = localStorage.getItem('token');
+      if (token && config.headers) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+    ```
+  - Quick Demo Switcher: Provides instant login shortcuts for `patient@example.com`, `provider@example.com`, 
+    and `admin@example.com` to simplify evaluation during live interviews and demos.
+
+6.3 Discovery Flow: Treatment -> Hospital -> Doctor -> Consultation
+  - User lands on `/` (Hero section with procedure search).
+  - Navigates to `/treatments`: Filters procedures by specialty (Cardiology, Orthopedics, Oncology) and city.
+  - Clicks a Treatment card -> `/treatments/:slug`:
+    - Shows description, typical stages, recovery timeline, USA/UK comparison savings badge (70%–85% saved).
+    - Lists related accredited hospitals and operating surgeons.
+  - Clicks "Request Consultation" -> Navigates to `/consultation` with query parameters pre-filled:
+    `/consultation?treatment=TREATMENT_ID&hospital=HOSPITAL_ID`.
+  - Submits case details -> Instantly appears in provider triage queue and patient dashboard.
+
+6.4 Interactive Cost Estimator UX & State Machine (`client/src/pages/CostEstimatorPage.tsx`)
+  - Inputs (Left Column):
+    1. Treatment Select (MongoDB query)
+    2. Medical City Selector Buttons (Delhi NCR, Chennai, Mumbai, Bengaluru, Hyderabad, Kolkata)
+    3. Hospital Select (dynamically filtered by chosen city)
+    4. Complexity Radio Cards (Standard 0.9x, Moderate 1.0x, High/Revision 1.35x)
+    5. Accommodation Slider (3 to 30 days)
+    6. Travel Stay Slider (7 to 45 days)
+  - Lifecycle: Debounced `useEffect` calls `calculateCostEstimate(params)` whenever any parameter changes.
+  - Outputs (Right Column):
+    - Extra-large Total Range Hero Card (`₹4,20,050 – ₹7,69,750` / `$5,066 – $9,348`).
+    - 3 Highlight sub-cards: Medical Cost, Travel Cost, Accommodation Cost.
+    - 6-part itemized breakdown table with lower and upper bounds.
+    - One-click Currency Switcher: Re-renders all ranges in `₹ INR` or `$ USD` seamlessly.
+    - Statutory Non-Binding Disclaimer Notice.
+    - "Save Estimate to My Dashboard" button: persists via `POST /api/estimator/save` and confirms with toast.
+
+6.5 Role-Based Dashboards
+  - Patient Dashboard (`/dashboard`):
+    - 7-Stage visual journey timeline.
+    - 4 core metric cards: Consultation Requests, Upcoming Appointments, Medical Documents, Travel Planning.
+    - Upcoming Teleconsultation video room launcher button.
+    - Consultation Requests triage view with doctor clinical responses.
+    - Saved Treatment Cost Estimates card with range breakdown, recalculate link, and deletion.
+    - Saved / Recommended accredited hospitals.
+  - Provider Dashboard (`/provider/dashboard`):
+    - Incoming patient inquiries queue.
+    - Clinical response editor allowing hospital staff to draft evaluation notes and update status to `responded`.
+  - Admin Dashboard (`/admin/dashboard`):
+    - Platform overview KPI cards (total patients, verified hospitals, active consultations).
+    - Hospital verification table with toggle buttons.
+
+6.6 Component Design System
+  - Curated HSL color palette in `index.css`: Navy/Slate (`#020617`, `#0f172a`), Medical Emerald (`#059669`), 
+    Saffron Orange (`#ea580c`), Primary Cyan (`#0284c7`).
+  - Reusable Atomic Components in `client/src/components/ui`:
+    - `Button.tsx`: Variants (`primary`, `saffron`, `outline`, `ghost`, `danger`), sizes (`sm`, `md`, `lg`), 
+      loading spinner support.
+    - `Card.tsx`: Card, CardHeader, CardBody, CardFooter with border and elevation tokens.
+    - `Badge.tsx`: Color variants (`primary`, `success`, `warning`, `saffron`, `neutral`), sizes (`sm`, `md`).
+    - `LoadingSpinner.tsx`: Full-page and inline pulsing animations.
+    - `EmptyState.tsx`: High-aesthetic fallback views for empty query results.
+
+====================================================================================================
+7. FEATURE-BY-FEATURE WORKING, IMPLEMENTATION & TECH MAPPING
+====================================================================================================
+
+FEATURE 1: Treatment Discovery & Cost Comparison
+- What it does: Patients search surgeries (e.g. CABG, Knee Replacement) and compare Indian costs against 
+  the US and UK.
+- Frontend: `TreatmentsPage.tsx`, `TreatmentDetailPage.tsx`, `CostComparisonCard.tsx`.
+- Backend: `GET /api/treatments`, `GET /api/treatments/:slug`.
+- Tech Used: React Router, Axios, Mongoose slug index, Tailwind CSS gradients.
+
+FEATURE 2: Treatment Cost Estimator
+- What it does: Generates non-binding planning envelopes across 6 cost categories based on procedure, 
+  city, hospital, complexity, and lodging/stay duration.
+- Frontend: `CostEstimatorPage.tsx`, `costEstimatorService.ts`.
+- Backend: `costEstimatorService.ts`, `costEstimatorController.ts`, `CostEstimate.ts`.
+- Tech Used: Decoupled service architecture, debounced React effects, currency formatting (`toLocaleString`), 
+  MongoDB persistence.
+
+FEATURE 3: Role-Based Authentication & Authorization
+- What it does: Grants differentiated permissions and dashboards to Patients, Providers, and Admins.
+- Frontend: `AuthContext.tsx`, `ProtectedRoute.tsx`, `LoginPage.tsx`, `RegisterPage.tsx`.
+- Backend: `authController.ts`, `authService.ts`, `authMiddleware.ts` (`protect`, `authorize`).
+- Tech Used: JWT (HMAC SHA-256), bcryptjs, Express middleware closures, localStorage.
+
+FEATURE 4: Medical Document Vault
+- What it does: Organizes radiology scans, prescriptions, discharge summaries, and MEA visa letters.
+- Frontend: `MedicalDocumentsPage.tsx`, upload modal, category filters.
+- Backend: `medicalDocumentController.ts`, `MedicalDocument.ts`.
+- Tech Used: Mongoose enums, prototype security disclosures, access audit trail fields.
+
+FEATURE 5: Travel Logistics & 7-Stage Journey Roadmap
+- What it does: Manages flight numbers, hotel tiers, airport chauffeur pickup, and tracks patient progress.
+- Frontend: `TravelPlannerPage.tsx`, `DashboardPage.tsx` visual timeline.
+- Backend: `travelPlanController.ts`, `TravelPlan.ts`.
+- Tech Used: Mongoose 1-to-1 patient association, responsive grid layout, SVG timeline icons.
+
+FEATURE 6: Provider Consultation Triage
+- What it does: Hospital doctors evaluate inquiries, review patient symptoms, and submit official replies.
+- Frontend: `ProviderDashboardPage.tsx`.
+- Backend: `consultationController.ts`, `Consultation.ts`.
+- Tech Used: REST PATCH endpoints, role protection (`authorize('provider', 'admin')`).
+
+FEATURE 7: Admin Verification & Platform Analytics
+- What it does: Admins review platform metrics and toggle hospital verification credentials.
+- Frontend: `AdminDashboardPage.tsx`.
+- Backend: `adminController.ts`, `hospitalController.ts`.
+- Tech Used: MongoDB aggregation pipelines, boolean state toggles.
+
+FEATURE 8: Medical City Guides
+- What it does: Explores India's premier medical hubs (Delhi NCR, Chennai, Mumbai, Bengaluru, Hyderabad, Kolkata).
+- Frontend: `MedicalCitiesPage.tsx`, `CityDetailPage.tsx`.
+- Backend: `GET /api/cities`, `GET /api/hospitals?city=...`.
+- Tech Used: Dynamic route parameters (`useParams`), hospital count aggregation.
+
+====================================================================================================
+8. MINUTE CODE-LEVEL DETAILS COMMONLY PROBED IN INTERVIEWS
+====================================================================================================
+
+8.1 Why Decouple Calculation Logic into a Backend Service?
+  - Q: "Why didn't you just write the cost calculation math inside the React component?"
+  - Answer:
+    1. Single Source of Truth: Multiple client interfaces (web app, mobile app, partner portals) can 
+       request cost estimations without duplicating JavaScript formulas.
+    2. Intellectual Property & Security: Proprietary hospital discount margins, provider fee formulas, 
+       and complexity coefficients remain protected on the backend rather than exposed in client bundles.
+    3. Upgradability: The backend service can be seamlessly upgraded to query external hospital ERP 
+       APIs or an ML pricing model without touching or redeploying client React components.
+    4. Testability: The service can be unit-tested headlessly in CI/CD without mounting React DOM trees.
+
+8.2 Why Show Cost Ranges Rather Than a Single Quote?
+  - Q: "Why does the estimator display ₹X – ₹Y instead of a fixed price like ₹3,50,000?"
+  - Answer:
+    1. Clinical Reality: Surgeries are not off-the-shelf commodities. A patient's comorbidities 
+       (diabetes, hypertension), intraoperative findings, implant brand selection, and ICU length of 
+       stay directly alter final billing.
+    2. Regulatory & Legal Protection: Presenting a single quote can be construed as a binding medical 
+       contract or invoice. Ranges, coupled with the mandatory statutory disclaimer, ensure transparency 
+       while preventing patient misinterpretation and healthcare liability.
+
+8.3 Mongoose Pre-save Hook vs Controller Hashing
+  - Q: "Where is password hashing handled and why?"
+  - Answer:
+    - Implemented in `User.ts` via Mongoose middleware:
+      ```typescript
+      userSchema.pre('save', async function (next) {
+        if (!this.isModified('passwordHash')) return next();
+        this.passwordHash = await bcrypt.hash(this.passwordHash, 10);
+        next();
+      });
+      ```
+    - Rationale: Defense-in-depth. If a developer creates another route or seed script that saves a user, 
+      the password is guaranteed to be hashed automatically before hitting the database, preventing 
+      accidental plaintext storage.
+
+8.4 Why MongoDB was Chosen and How Schema Supports Postgres Migration
+  - Q: "Why MongoDB, and how would you migrate to PostgreSQL if requested?"
+  - Answer:
+    - MongoDB provides flexibility for arrays of accreditation strings, languages, facilities, and 
+      multilingual currency fee subdocuments.
+    - However, our schemas avoid anti-patterns like arbitrarily nested polymorphic documents. Every 
+      entity has strong types, validation, and relational foreign keys (`patient: ObjectId ref: 'User'`).
+    - Migration to PostgreSQL is straightforward:
+      - `User` -> `users` table
+      - `Hospital` -> `hospitals` table + `hospital_specialties` join table
+      - `Doctor` -> `doctors` table (FK `hospital_id`)
+      - `CostEstimate` -> `cost_estimates` table with JSONB or decomposed columns for breakdown ranges.
+
+8.5 JWT Token Storage in LocalStorage vs HttpOnly Cookies
+  - Q: "Why is the JWT stored in localStorage in this prototype, and what would you do in production?"
+  - Answer:
+    - In this prototype: `localStorage` was chosen for portability, simplicity of local cross-port dev 
+      (`localhost:5173` talking to `localhost:5000`), and ease of demoing.
+    - Production Architecture: In production, tokens should be transmitted via `Set-Cookie: HttpOnly; 
+      Secure; SameSite=Strict`. This mitigates Cross-Site Scripting (XSS) risks since JavaScript cannot 
+      read `HttpOnly` cookies. CSRF tokens or SameSite policies would be added to counter CSRF.
+
+8.6 RBAC Security Pitfalls & Route Protection
+  - Q: "How do you prevent a patient from tampering with another user's documents or consultations?"
+  - Answer:
+    - Authenticating with a valid token is not enough. The controller strictly queries by 
+      `{ _id: req.params.id, patient: req.user._id }`.
+    - Even if a malicious patient guesses the ObjectId of another patient's document, the database query 
+      returns `null`, yielding a `404 Not Found` or `403 Forbidden`.
+
+8.7 Database Indexing Strategy
+  - Q: "What indexes are defined in MongoDB and why?"
+  - Answer:
+    - `User`: `{ email: 1 }` (unique) -> O(1) login lookups.
+    - `Hospital`: `{ slug: 1 }` (unique), `{ city: 1 }` -> Rapid filtering of hospitals by city.
+    - `Treatment`: `{ slug: 1 }` (unique), `{ category: 1 }` -> Specialty filtering.
+    - `Appointment`: `{ patient: 1, appointmentDate: 1 }` -> Fast dashboard schedule loading.
+    - `CostEstimate`: `{ patient: 1, createdAt: -1 }` -> Instant retrieval of latest estimates.
+
+8.8 Handling Medical Disclaimers & Non-Diagnostic Compliance
+  - Q: "Does the platform provide medical diagnosis or AI advice?"
+  - Answer:
+    - Absolutely not. The platform strictly positions itself as an administrative discovery and journey 
+      facilitation platform.
+    - Clear banners throughout the application state:
+      "AarogyaBharat provides informational estimates and logistics coordination only. It does not 
+       provide medical diagnosis or clinical evaluations. A binding quotation and treatment plan must 
+       originate directly from the accredited healthcare provider."
+
+====================================================================================================
+9. 70+ RAPID-FIRE & SCENARIO-BASED INTERVIEW QUESTIONS & MODEL ANSWERS
+====================================================================================================
+
+9.1 Foundation Technical Questions (Q1 - Q50)
+----------------------------------------------------------------------------------------------------
+
+Q1: What problem does this project solve?
+A1: It eliminates friction in medical tourism to India by integrating hospital discovery, verified doctor 
+credentials, non-binding cost estimations, teleconsultations, document management, and travel logistics 
+into a unified platform.
+
+Q2: What are the main roles in the system?
+A2: Patient, Healthcare Provider (Hospital/Doctor Liaison), and System Administrator.
+
+Q3: How is authentication handled?
+A3: Stateless JWT authentication. Passwords hashed with bcrypt (10 rounds). Tokens verified by Express 
+middleware and attached as `req.user`.
+
+Q4: What is the purpose of the 7-stage patient journey?
+A4: To give patients an intuitive visual roadmap of their medical trip: Medical Need -> Hospital Discovery -> 
+Consultation -> Treatment Planning -> Travel Planning -> Hospital Visit -> Follow-up.
+
+Q5: What happens if an unregistered user visits the Cost Estimator?
+A5: They can freely calculate estimates and switch currencies (public endpoint). If they click "Save Estimate 
+to Dashboard", they are redirected to login with their state preserved.
+
+Q6: How does the Cost Estimator calculate hospital clinical costs?
+A6: As an established 22%–32% proportion of the base procedure cost, covering operating theater allocation, 
+pre-op diagnostics, pathology, anesthesia, in-patient nursing, and pharmacy consumables.
+
+Q7: What factors influence the travel duration in the estimator?
+A7: Surgical recovery time, post-op fit-to-fly clinical observation, and international flight buffers.
+
+Q8: How are hospital accreditations verified?
+A8: Platform Admins inspect official JCI/NABH certificates and toggle verification status in the Admin Dashboard.
+
+Q9: What is JCI accreditation?
+A9: Joint Commission International — the gold standard global accreditation for hospital safety, surgical 
+protocols, and patient care standards.
+
+Q10: What is NABH?
+A10: National Accreditation Board for Hospitals & Healthcare Providers — India's apex healthcare accreditation body.
+
+Q11: Why is Vite preferred over Create React App (CRA)?
+A11: CRA is deprecated and slow (Webpack bundle-based). Vite uses native browser ES modules during development 
+and esbuild for blazing-fast cold starts and near-instant HMR.
+
+Q12: How does the frontend handle token expiry?
+A12: The Axios response interceptor intercepts 401 Unauthorized responses, clears localStorage, and redirects 
+the user to `/login`.
+
+Q13: What is the purpose of `express.json({ limit: '10mb' })`?
+A13: To parse inbound JSON payloads while setting a safe 10MB ceiling to prevent Denial of Service (DoS) memory 
+exhaustion attacks.
+
+Q14: How are slug URLs generated?
+A14: Derived from entity names (e.g., 'Fortis Memorial Research Institute' -> 'fortis-memorial-research-institute'), 
+stored in lowercase, and indexed uniquely for clean SEO-friendly URLs.
+
+Q15: How does the provider update a consultation response?
+A15: Via `PATCH /api/consultations/:id` with payload `{ response, status: 'responded' }`.
+
+Q16: How is CORS configured?
+A16: Enabled via `cors()` with origin whitelisting (`http://localhost:5173`) and `credentials: true`.
+
+Q17: Why is Morgan used in the Express app?
+A17: To log HTTP method, route, status code, and latency in standard developer formatting.
+
+Q18: What is Helmet?
+A18: A security middleware package that sets 14+ HTTP response headers to defend against clickjacking, MIME-type 
+sniffing, and cross-site scripting.
+
+Q19: How are doctor consultation fees stored?
+A19: As a subdocument containing both INR and USD minimum and maximum fee thresholds.
+
+Q20: Why are medical documents not exposed publicly?
+A20: To comply with health data privacy guidelines. All document retrieval endpoints enforce JWT authentication 
+and ownership checks.
+
+Q21: What is the purpose of `seed.ts`?
+A21: To populate the database with realistic demo hospitals (Medanta, Apollo, Fortis), verified doctors, 
+comprehensive surgical procedures, and test accounts.
+
+Q22: What is the purpose of `concurrently` in root `package.json`?
+A22: To run both the Express backend and Vite frontend development servers simultaneously in one terminal window.
+
+Q23: How does the currency toggle work?
+A23: A state switch (`currency: 'INR' | 'USD'`) dynamically formats all values using `toLocaleString('en-IN')` 
+or `toLocaleString('en-US')`.
+
+Q24: Can a regular user register as an admin?
+A24: No. `authController.ts` explicitly intercepts and rejects `role === 'admin'` with `403 Forbidden`.
+
+Q25: What is the purpose of `costEstimatorRoutes.ts`?
+A25: To declare endpoints for calculating (`POST /calculate`), saving (`POST /save`), listing (`GET /my`), 
+and deleting (`DELETE /:id`) cost estimates.
+
+Q26: How does the application handle invalid MongoDB ObjectIds?
+A26: Controllers check `Types.ObjectId.isValid(id)` before querying Mongoose; global error handler catches 
+CastErrors.
+
+Q27: How are savings percentages calculated for procedures?
+A27: `((usaComparisonCost - avgIndiaCost) / usaComparisonCost) * 100`, typically yielding 70%–85% savings.
+
+Q28: What is an e-Medical Visa (MED-1)?
+A28: An official Indian government visa issued to foreign patients traveling to recognized hospitals in India.
+
+Q29: How does the Travel Planner assist international patients?
+A29: Captures airport chauffeur escort needs, destination city, flight numbers, and lodging preferences.
+
+Q30: Why is TypeScript advantageous in this project?
+A30: Eliminates runtime schema mismatch errors across medical entities and provides shared type contracts.
+
+Q31: How is responsive layout achieved?
+A31: Using Tailwind CSS breakpoints (`sm:`, `md:`, `lg:`, `xl:`) and CSS Grid layouts.
+
+Q32: What is Lucide React?
+A32: A modern, tree-shakeable SVG icon library providing clean medical and navigation icons.
+
+Q33: How are passwords excluded from user query results?
+A33: By omitting the password field in responses or explicitly projecting out `passwordHash`.
+
+Q34: What is the purpose of `EmptyState.tsx`?
+A34: A reusable UI component that displays an informative graphic and call-to-action when search queries return 
+no results.
+
+Q35: What cities are currently featured in the platform?
+A35: Delhi NCR, Chennai, Mumbai, Bengaluru, Hyderabad, and Kolkata.
+
+Q36: What is robotic joint replacement?
+A36: An orthopedic surgery utilizing robotic arm precision for knee and hip implants with minimal blood loss.
+
+Q37: What is CABG?
+A37: Coronary Artery Bypass Graft — cardiac open-heart surgery rerouting blood around clogged arteries.
+
+Q38: How does the frontend prevent unauthorized page access?
+A38: `<ProtectedRoute>` inspects user auth status and role array before rendering child components.
+
+Q39: What is the purpose of `AuthRequest` in `types/index.ts`?
+A39: Extends standard Express `Request` with optional `user?: IUser` property populated by auth middleware.
+
+Q40: How are hospital ratings aggregated?
+A40: Calculated from customer review submissions and stored as average rating and reviewCount on the hospital document.
+
+Q41: What is the difference between teleconsultation and in-person appointments?
+A41: Teleconsultations occur over video before international travel; in-person visits occur upon arrival at the hospital.
+
+Q42: What happens when an estimate is saved?
+A42: A document is inserted into the `CostEstimate` collection linked to the authenticated patient's ObjectId.
+
+Q43: Can a patient delete their saved estimate?
+A43: Yes, via `DELETE /api/estimator/:id`, with backend ownership verification.
+
+Q44: What is the default complexity level in the Cost Estimator?
+A44: `moderate` (1.0x baseline).
+
+Q45: Why is `select: false` or manual exclusion used for passwords?
+A45: To ensure password hashes are never accidentally transmitted in API responses.
+
+Q46: How does the frontend communicate with the backend?
+A46: Axios HTTP client communicating with REST endpoints on port 5000 with JSON payloads.
+
+Q47: What does the term "Medical Value Travel" (MVT) mean?
+A47: Travel where the primary motivation is obtaining high-quality medical healthcare combined with tourism/hospitality.
+
+Q48: What is NABL accreditation?
+A48: National Accreditation Board for Testing and Calibration Laboratories — accredits diagnostic labs in India.
+
+Q49: How does the application ensure SEO readiness?
+A49: Semantic HTML5 elements (`<header>`, `<main>`, `<footer>`, `<section>`), unique page titles, clean slug URLs.
+
+Q50: What is the next logical step after generating an estimate?
+A50: Clicking "Request Quotation" to submit medical records and obtain an official binding quote from the hospital.
+
+9.2 Advanced System Design & Real-World Scenario Questions (Q51 - Q70)
+----------------------------------------------------------------------------------------------------
+
+Q51: How would you prevent race conditions if two patients attempt to book the exact same doctor teleconsultation slot simultaneously?
+A51: In high-concurrency environments, double-booking is prevented using three complementary techniques:
+1. Database Unique Compound Index: Create a unique index on `{ doctor: 1, appointmentDate: 1 }` in MongoDB. If two concurrent transactions attempt to insert an appointment for the same doctor at the identical time slot, the second operation will trigger an E11000 duplicate key error, which the controller catches and transforms into a clean 409 Conflict ("This time slot was just claimed by another patient. Please select an alternate time").
+2. Optimistic Concurrency Control (OCC): Using Mongoose's built-in `__v` version key. When updating doctor availability schedules, the update query includes `{ _id: scheduleId, __v: currentVersion }`. If another request modified the slot in the interim, the version check fails and triggers a retry loop.
+3. Distributed Locking (Redis Redlock): For strict multi-instance deployments, acquire a Redis mutex lock on `lock:doctor:${doctorId}:${slotTimestamp}` with a 5-second TTL during checkout. The lock is released immediately upon appointment record persistence.
+
+Q52: How do you protect public calculation endpoints like `/api/estimator/calculate` against Denial of Service (DoS) and automated data scraping?
+A52: A multi-layered defense strategy:
+1. Rate Limiting (`express-rate-limit`): Implement a token bucket or sliding-window rate limiter restricting IP addresses to a reasonable threshold (e.g., 30 calculation requests per minute).
+2. Reverse Proxy / Cloudflare WAF: Cloudflare or AWS WAF placed in front of Node.js to filter Layer 7 HTTP floods, inspect suspicious TLS fingerprints, challenge abnormal bot patterns with Managed Challenges (Turnstile), and drop malformed requests before they hit Express.
+3. Schema Validation & Body Limits: Restrict `express.json({ limit: '10kb' })` on calculation routes and enforce strict payload validation via Zod to reject oversized or unexpected nested payloads.
+4. Response Caching: Cache deterministic combinations of `[treatmentId, city, complexity, stayDays, travelDays]` in Redis with a 1-hour TTL. Identical scrapes hit memory cache with near-zero CPU overhead.
+
+Q53: How does the application handle multi-currency conversions, and how does the platform manage real-world exchange rate drift between estimation and hospital billing?
+A53:
+1. Base Storage & Conversion: The backend stores procedure benchmarks in Indian Rupees (INR), the primary currency of provider billing. USD equivalents are computed using current baseline exchange rates (~83 INR/USD).
+2. Explicit Non-Binding Range Disclaimers: Because foreign exchange markets fluctuate daily and international banks charge conversion markups, the platform explicitly brands all quotes as non-binding planning estimates.
+3. Production Architecture: In production, integrate an automated cron service polling live rates daily from European Central Bank or OpenExchangeRates API into a Redis cache. Invoices and estimates display an explicit disclaimer: "Calculated at indicative rate 1 USD = ₹83.50 as of [Date]. Final billing will be converted at your issuing bank's real-time rate upon physical payment in India."
+
+Q54: How would you re-architect the Medical Document Center for production to handle massive DICOM radiology scans (2GB+ MRI/CT studies)?
+A54: The current prototype manages metadata and access controls safely, but production uploads of multi-gigabyte imaging files require bypassing the Node.js application server entirely:
+1. Direct-to-S3 Pre-Signed Multipart Uploads:
+   - Patient browser requests an upload ticket: `POST /api/documents/request-upload` with file name, type, and size.
+   - Node.js server authenticates user, verifies permissions, and calls AWS S3 SDK `createMultipartUpload` to generate time-limited (15-min) presigned chunk URLs.
+   - Browser splits the 2GB file into 10MB chunks using HTML5 File API and uploads parts directly to S3 via parallel HTTPS PUT requests.
+   - Upon completion, browser notifies Node.js: `POST /api/documents/complete-upload` with S3 ETags.
+2. Zero Server Memory Impact: The Node.js event loop and RAM are never burdened with streaming gigabytes of binary data.
+3. Server-Side Encryption (SSE-KMS): S3 bucket configured with AWS KMS customer-managed keys for HIPAA-grade encryption at rest, with lifecycle rules archiving old radiology records to S3 Glacier Flexible Retrieval after 1 year.
+
+Q55: Why did you choose React Context for Authentication instead of Redux Toolkit or Zustand?
+A55:
+1. Low Mutation Frequency: Authentication state (`user`, `token`, `isAuthenticated`) mutates only on login, registration, and logout. Unlike complex shopping carts or gaming states that mutate dozens of times per second, low-frequency auth state does not cause unnecessary React re-rendering cascades.
+2. Minimal Bundle Overhead: React Context is native to the React runtime, adding zero extra bytes to the client JavaScript bundle compared to Redux Toolkit (~40KB minified) and its surrounding middleware.
+3. Decoupled Service Architecture: Server state (treatments, hospitals, appointments, travel plans) is fetched on demand via modular Axios service functions rather than synchronized into a monolithic global client-side store, keeping the client lightweight and memory efficient.
+
+Q56: How would you implement real-time updates so providers see consultation inquiries instantly without manual browser refresh?
+A56: By implementing WebSockets via `Socket.io`:
+1. Connection Handshake & Authentication: When the provider opens `/provider/dashboard`, the Socket.io client connects to `wss://api.medjourney.in` passing the JWT in the `auth` handshake object. The server verifies the token and user role.
+2. Room-Based Scoping: The socket joins a specific room corresponding to the hospital: `socket.join('hospital:' + user.hospitalId)`.
+3. Event Broadcasting: When a patient submits a new consultation (`POST /api/consultations`), the controller emits an event to that hospital room:
+   `io.to('hospital:' + consultation.hospital).emit('inquiry:new', consultation)`.
+4. Reactive UI State: The provider's React dashboard listens on `inquiry:new` and prepends the new case to the triage table with an audio notification chime and counter badge increment.
+
+Q57: How does this platform adhere to data privacy regulations like GDPR, HIPAA, and India's DPDP Act 2023?
+A57:
+1. Data Minimization & Patient Consent: Only clinical data strictly necessary for treatment triage is collected, with explicit opt-in checkboxes prior to submission.
+2. Strict Ownership Isolation (IDOR Defense): Every private query enforces `{ patient: req.user._id }`. Patients cannot view or modify records belonging to other users.
+3. Data Encryption: TLS 1.3 in transit with HSTS; bcrypt hashing for passwords; AES-256 for medical records storage.
+4. Right to Erasure / Forget: Patients can delete their medical documents, travel itineraries, and saved cost scenarios at any time via authenticated REST DELETE endpoints, which immediately purge the database records.
+5. Role Separation: Hospital providers cannot browse platform-wide patient records—they can only access inquiries explicitly submitted to their own hospital facility.
+
+Q58: If the database scales to millions of reviews and hospital records, how would you maintain sub-100ms search latency?
+A58:
+1. Compound B-Tree Indexes: Ensure queries use prefix indexes such as `{ city: 1, specialties: 1, rating: -1 }`.
+2. Cursor-Based Pagination: Avoid high-offset `skip()` queries (e.g., `skip(10000)` forces scanning 10,000 index keys). Instead, use keyset/cursor pagination: `{ _id: { $gt: lastSeenId } }` limiting to 20 documents.
+3. Cache-Aside Pattern with Redis: Store top hospital search result sets in Redis with 15-minute TTLs. Cache is invalidated only when an admin modifies a hospital's profile.
+4. Read Replicas: Direct heavy search traffic to secondary replica nodes using Mongoose connection preference `readPreference: 'secondaryPreferred'`, keeping the primary replica dedicated to write transactions.
+5. Full-Text Search Engine: Offload broad medical terminology and specialty keyword searches to MongoDB Atlas Search (Lucene) or an external Elasticsearch cluster.
+
+Q59: How does the frontend handle API failures, network dropouts, or backend downtime?
+A59:
+1. Axios Global Interceptors: Intercepts 500, 502, 503, and network timeout errors, dispatching a non-blocking toast alert rather than crashing the component tree.
+2. Graceful Fallbacks & Empty States: Components utilize the reusable `<EmptyState />` component displaying helpful retry buttons and support helpline phone links when requests fail.
+3. Idempotent GET Request Retries: Integrated retry mechanism (via `axios-retry` or custom logic) that automatically retries failed idempotent GET queries up to 3 times using exponential backoff (e.g. 500ms, 1000ms, 2000ms) before declaring an error.
+4. React Error Boundaries: Key page zones are wrapped in React `<ErrorBoundary>` components to catch rendering errors and display a friendly fallback screen without breaking the entire application.
+
+Q60: Explain the exact difference between Authentication and Authorization in this codebase.
+A60:
+1. Authentication (`protect` middleware): Answers *"Who are you?"*
+   - Verifies the cryptographic validity of the JWT bearer token sent in the `Authorization` header.
+   - Decodes the user ID and verifies the user exists in the database.
+   - Populates `req.user`. If missing, invalid, or expired, halts execution with `401 Unauthorized`.
+2. Authorization (`authorize` middleware): Answers *"Do you have permission to do this?"*
+   - Inspects `req.user.role` against an allowed whitelist: `authorize('provider', 'admin')`.
+   - If an authenticated `patient` attempts to access a provider triage route, authentication succeeds, but authorization halts execution with `403 Forbidden`.
+
+Q61: What is the purpose of Mongoose `.lean()` in read queries, and when should you NOT use it?
+A61:
+- Purpose: By default, Mongoose wraps query results in heavy Mongoose Document instances complete with change tracking, getters/setters, and internal virtuals. Appending `.lean()` returns plain JavaScript objects (POJOs), reducing heap memory consumption by up to 70% and accelerating JSON serialization speed by 3x–5x on large read queries (e.g., `Hospital.find().lean()`).
+- When NOT to use: Do NOT use `.lean()` when:
+  1. You need to call document instance methods (e.g., `user.comparePassword()`).
+  2. You intend to modify fields and trigger Mongoose pre-save hooks via `.save()`.
+  3. You rely on Mongoose virtual fields or custom schema getters.
+
+Q62: How does the application protect against XSS (Cross-Site Scripting) and CSRF (Cross-Site Request Forgery)?
+A62:
+1. XSS Defense:
+   - React JSX engine auto-escapes all strings rendered in templates by default, neutralizing injected `<script>` tags.
+   - Helmet middleware injects strict `X-XSS-Protection: 1; mode=block` and `Content-Security-Policy` headers.
+   - User inputs (messages, names) are sanitized and validated with strict type contracts.
+2. CSRF Defense:
+   - Traditional CSRF attacks exploit ambient browser session cookies automatically sent across third-party origins.
+   - This platform utilizes a stateless Bearer token stored in client memory/localStorage and explicitly attached via JavaScript Axios request headers. Third-party sites cannot access or attach this custom header, eliminating traditional form-based CSRF vectors.
+
+Q63: What is the clinical significance of the JCI and NABH accreditations displayed on hospital cards?
+A63:
+- JCI (Joint Commission International): Based in the United States, JCI is the global gold standard for healthcare quality. It audits hospitals against 1,200+ rigorous standards covering medication management, surgical safety checklists, infection control, and credentialing of medical staff.
+- NABH (National Accreditation Board for Hospitals & Healthcare Providers): India's apex healthcare accreditation body under the Quality Council of India, aligned with global ISQua standards.
+- Importance: For international medical travelers traveling thousands of miles, visible JCI/NABH badges provide immediate, verified reassurance that the Indian hospital operates at or above Western clinical safety standards.
+
+Q64: How does the platform ensure that the Cost Estimator does not violate Indian medical advertising or telemedicine regulations?
+A64:
+- In India, medical regulations (National Medical Commission / NMC guidelines) prohibit misleading medical advertisements, fixed fee guarantees without clinical examination, and unverified medical diagnosis.
+- Compliance safeguards:
+  1. The tool outputs non-binding planning *ranges* rather than exact quotes or medical bills.
+  2. Clear banners state: *"This is an illustrative estimate for planning purposes only. It does NOT constitute medical advice, diagnosis, or a binding price quote."*
+  3. Every estimate requires an official quotation from the accredited hospital following doctor review of records.
+
+Q65: How would you implement end-to-end automated testing for this application in CI/CD?
+A65:
+- Using a Playwright or Cypress automated test suite executing inside GitHub Actions:
+  1. Spawns test containers for MongoDB, Node.js backend, and Vite frontend.
+  2. Seeds test fixtures into a transient database.
+  3. Automated browser agent executes the complete user lifecycle:
+     - Register as new patient -> Navigates to `/cost-estimator` -> Configures CABG procedure in Delhi NCR -> Clicks "Save Estimate" -> Verifies MongoDB persistence.
+     - Submits consultation inquiry -> Logs out.
+     - Logs in as provider -> Navigates to `/provider/dashboard` -> Finds inquiry -> Submits clinical reply.
+     - Logs back in as patient -> Verifies green "Specialist Review Complete" badge on `/dashboard`.
+  4. Takes automated screenshot artifacts and asserts zero console errors and HTTP 200/201 responses.
+
+Q66: Explain how Tailwind CSS purging and Vite bundling optimize production load speed.
+A66:
+- Vite: Uses Rollup under the hood for production builds. It analyzes the ES module import graph, tree-shakes dead code, splits vendor dependencies into optimized chunks, and pre-compresses static assets.
+- Tailwind CSS JIT (Just-In-Time) Engine: Scans all `.tsx` and `.html` files in `src/` to identify the exact CSS classes actually utilized. It purges all unused framework classes, compressing what would be a 3MB stylesheet down to an ultra-lean 51KB minified CSS bundle (`index-PWBtQ0aG.css`).
+
+Q67: What is the architectural purpose of the 7-stage patient journey roadmap on the dashboard?
+A67:
+- Medical travel involves significant patient anxiety regarding international travel, foreign hospitals, and unfamiliar clinical environments.
+- The 7-stage roadmap functions as a state machine tracking milestone progression:
+  1. Medical Need Evaluation -> 2. Hospital Discovery -> 3. Specialist Consultation -> 4. Treatment Planning -> 5. Travel & Visa Logistics (MED-1) -> 6. Hospital Admission & Surgery -> 7. Post-Op Care & Return.
+- Each stage dynamically changes color (Completed = Emerald green, Active = Primary pulsing blue, Upcoming = Muted slate) based on whether consultations are answered, visas are stamped, or appointments are confirmed, providing clarity and peace of mind.
+
+Q68: How do you prevent Insecure Direct Object References (IDOR) when a patient accesses `/api/travel-plans/my` or `/api/documents/my`?
+A68:
+- Vulnerable pattern: `GET /api/documents?patientId=123` allows an attacker to alter the query string to `patientId=124` to view another patient's documents.
+- Secure implementation: Our routes do NOT accept patient IDs from client query parameters or request bodies.
+- Instead, the controller extracts the user identity directly from the cryptographically verified JWT:
+  `const patientId = req.user._id;`
+  `const docs = await MedicalDocument.find({ patient: patientId });`
+- Because the token is signed with a secret key known only to the server, a user cannot impersonate another patient ID.
+
+Q69: If you needed to deploy this system to production tomorrow, what would be your step-by-step deployment architecture?
+A69:
+1. Containerization: Build production Docker images for backend (Node 20 Alpine) and frontend (multi-stage Nginx Alpine serving Vite `dist/` bundle).
+2. Cloud Infrastructure: Deploy backend containers on AWS ECS Fargate or GCP Cloud Run with auto-scaling (min 2, max 10 instances based on CPU/memory metrics).
+3. Database: Provision a multi-region MongoDB Atlas cluster (M10+ tier) with automated snapshots, VPC peering, and IP whitelisting.
+4. CDN & Security: Route traffic through Cloudflare for DNS management, automated TLS/SSL certificate termination, DDoS mitigation, and edge caching for static assets.
+5. Secrets Management: Store `JWT_SECRET`, database connection strings, and API keys in AWS Secrets Manager or GCP Secret Manager injected as environment variables at container startup.
+
+Q70: What was the most technically challenging aspect of implementing the Treatment Cost Estimator?
+A70:
+- The challenge was decoupling the pricing logic into an isolated backend service that calculates realistic, mathematically sound ranges rather than simplistic flat numbers, while balancing:
+  1. Dynamic procedure baselines fetched from database records.
+  2. Multi-tier complexity multipliers (Standard, Moderate, High/Revision) scaling procedure costs.
+  3. Realistic ancillary percentages (Hospital & clinical charges derived as 22%–32% of surgical baseline).
+  4. Time-based lodging and transit variables scaling linearly with recovery and journey durations.
+  5. Multi-currency synchronization (producing both INR and USD lower and upper bounds).
+  6. Strict non-binding legal disclaimers preventing misinterpretation as a guaranteed quotation.
+- The resulting decoupled service architecture ensures the pricing engine can be upgraded to integrate with live hospital rate cards without rewriting client React components.
+
+
+====================================================================================================
+10. PRODUCTION HARDENING ROADMAP (WHAT'S NEXT FOR SCALE)
+====================================================================================================
+When transitioning this prototype into a national-scale commercial platform:
+
+1. Security & Compliance:
+   - HIPAA / DISHA (Digital Information Security in Healthcare Act) compliance.
+   - Store encrypted medical documents in AWS S3 with KMS server-side encryption and time-limited 
+     pre-signed URLs.
+   - Transition JWT tokens to secure, HttpOnly, SameSite cookies.
+   - Implement rate limiting (`express-rate-limit`) on auth and calculation endpoints.
+
+2. Architecture & Scaling:
+   - Introduce Redis caching layer for frequently accessed hospital and treatment catalog queries.
+   - Migrate to PostgreSQL with Prisma ORM for relational ACID transaction guarantees on appointments.
+   - Containerize client and server with Docker and deploy via Kubernetes or AWS ECS.
+
+3. Payments & Escrow:
+   - Integrate Razorpay / Stripe for multi-currency international teleconsultation payments and surgical 
+     deposit escrow.
+
+4. Real-time Telehealth:
+   - Integrate WebRTC / Twilio Video API for encrypted end-to-end patient-doctor video consultations.
+   - Implement WebSocket / Socket.io notifications for real-time consultation status updates.
+
+====================================================================================================
+END OF COMPREHENSIVE ARCHITECTURE & INTERVIEW GUIDE
+====================================================================================================
