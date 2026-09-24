@@ -7,9 +7,14 @@ export const createApp = (): Application => {
   const app: Application = express();
 
   // Middleware
+  const clientUrlEnv = process.env.CLIENT_URL;
+  const allowedOrigins = clientUrlEnv
+    ? (clientUrlEnv.includes(',') ? clientUrlEnv.split(',').map(u => u.trim()) : clientUrlEnv)
+    : 'http://localhost:5173';
+
   app.use(
     cors({
-      origin: process.env.CLIENT_URL || 'http://localhost:5173',
+      origin: allowedOrigins,
       credentials: true
     })
   );
